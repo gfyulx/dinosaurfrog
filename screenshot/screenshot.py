@@ -27,10 +27,10 @@ class ScreenShot(object):
     #间隔指定时间截屏
     #默认的文件名保存为handle_time.jepg;
     #time为YYYYmmddHHMMDDSSsss;
-    def WinCaptureByTime(self,handle,sec,fileDir):
+    def WinCaptureByTime(self,handle,secs,fileDir):
         while True:
             self.WinCapture(handle,fileDir)
-            time.sleep(sec)        
+            time.sleep(secs/1000)        
 
     def WinCapture(self,handle,fileDir):
         hwnd = handle
@@ -47,7 +47,8 @@ class ScreenShot(object):
         h=b-t
         saveBitMap.CreateCompatibleBitmap(mfcDC, w,h)
         saveDC.SelectObject(saveBitMap)  
-        saveDC.BitBlt((0,0),(w, h) , mfcDC, (l,t), win32con.SRCCOPY)
+        #saveDC.BitBlt((0,0),(w, h) , mfcDC, (l,t), win32con.SRCCOPY)
+        saveDC.BitBlt((0,0),(w, h) , mfcDC, (0,0), win32con.SRCCOPY)
         datenow=datetime.datetime.now()
         cc=time.time()
         secs=(cc-int(cc))*1000
@@ -142,6 +143,7 @@ class ScreenShot(object):
         except Exception as e:
             handle=0
         return handle
+
 
    
 
