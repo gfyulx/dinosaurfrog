@@ -3,7 +3,12 @@
 
 import win32gui
 import win32api
-
+import win32con
+import win32ui
+import time
+import datetime
+from PIL import Image
+import os
 
 class ScreenShot(object):
     def __init__(self):
@@ -17,6 +22,53 @@ class ScreenShot(object):
                       'ry': 0}  # 窗口的逻辑坐标，左上x,左上y,右下x,右下y
         self.screenSize = None
         self.fullScreen = 0  # 是否全屏
+
+    #截屏并保存
+    #间隔指定时间截屏
+    #默认的文件名保存为handle_time.jepg;
+    #time为YYYYmmddHHMMDDSSsss;
+    def WinCaptureByTime(self,handle,sec,fileDir):
+        while True:
+            self.WinCapture(handle,fileDir)
+            time.sleep(sec)        
+
+    def WinCapture(self,handle,fileDir):
+        hwnd = handle
+        hwndDC = win32gui.GetWindowDC(hwnd)  
+        mfcDC=win32ui.CreateDCFromHandle(hwndDC)  
+        saveDC=mfcDC.CreateCompatibleDC()  
+        saveBitMap = win32ui.CreateBitmap()  
+        #MoniterDev=win32api.EnumDisplayMonitors(None,None) 
+        #w = args[2]
+        #h = args[3]
+        #print w,h　　　#图片大小 
+        l,t,r,b=self.getWinRect(handle)
+        w=r-l
+        h=b-t
+        saveBitMap.CreateCompatibleBitmap(mfcDC, w,h)
+        saveDC.SelectObject(saveBitMap)  
+        saveDC.BitBlt((0,0),(w, h) , mfcDC, (l,t), win32con.SRCCOPY)
+        datenow=datetime.datetime.now()
+        cc=time.time()
+        secs=(cc-int(cc))*1000
+        filePrx="%s/%d_%s%03d"%(fileDir,handle,datenow.strftime("%Y%m%d%H%M%S"),secs)
+        bmpname=filePrx+".bmp"
+        saveBitMap.SaveBitmapFile(saveDC, bmpname)
+        pic = Image.open(bmpname)
+        fileName=filePrx+".jpeg"
+        pic.save(os.path.join(fileDir,fileName), 'jpeg')
+        os.remove(bmpname)
+        return pic
+    #查找指定句柄的第N个子窗口
+    def findSubWinX(self,hadnle,idx):
+        if not handle:         
+            return      
+        hwndChildList = []     
+        win32gui.EnumChildWindows(handle, lambda hwnd, param: param.append(hwnd),  hwndChildList)
+        if len(hwndChildList)>=idx and idx>=1:
+            return hwndChildList[idx-1]
+        else:
+            return None  
 
     def setAttr(self, handle):
         self.className = self.getClassNameByHandle(handle)
@@ -68,7 +120,7 @@ class ScreenShot(object):
         currHandle = win32gui.GetForegroundWindow()
         return currHandle
     def getWinRect(self,handle):
-        """
+        """ 相对桌面
         left:窗口的左上坐标
         top:窗口的顶部坐标
         right:窗口的右上相对坐标
@@ -76,6 +128,7 @@ class ScreenShot(object):
         """
         if handle>0:
             return win32gui.GetWindowRect(handle)
+            #return win32gui.GetClientRect(handle)            
         else:
             return 0,0,0,0
         
@@ -90,4 +143,5 @@ class ScreenShot(object):
             handle=0
         return handle
 
+   
 
