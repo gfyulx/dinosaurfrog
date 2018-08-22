@@ -9,6 +9,8 @@ import time
 import datetime
 from PIL import Image
 import os
+import numpy as np
+import cv2
 
 class ScreenShot(object):
     def __init__(self):
@@ -23,25 +25,68 @@ class ScreenShot(object):
         self.screenSize = None
         self.fullScreen = 0  # 是否全屏
 
-    #截屏并保存
-    #间隔指定时间截屏
-    #默认的文件名保存为handle_time.jepg;
-    #time为YYYYmmddHHMMDDSSsss;
-    def WinCaptureByTime(self,handle,secs,fileDir):
-        while True:
-            self.WinCapture(handle,fileDir)
-            time.sleep(secs/1000)        
-
-    def WinCapture(self,handle,fileDir):
+    def WinCaptureToVideo(self,handle,secs,fileDir):       
+        fps=int(1000/secs)
+        #fps=25
+        l,t,r,b=self.getWinRect(handle)
+        fourcc=cv2.VideoWriter_fourcc('X','V','I','D')
+        datenow=datetime.datetime.now()
+        cc=time.time()
+        secsl=(cc-int(cc))*1000
+        filePrx="%s/%d_%s%03d"%(fileDir,handle,datenow.strftime("%Y%m%d%H%M%S"),secsl)
+        videoFile="%s%s"%(filePrx,".avi")
+        video=cv2.VideoWriter(videoFile,fourcc,fps,(r-l,b-t))
+        """
+        """
         hwnd = handle
         hwndDC = win32gui.GetWindowDC(hwnd)  
         mfcDC=win32ui.CreateDCFromHandle(hwndDC)  
         saveDC=mfcDC.CreateCompatibleDC()  
         saveBitMap = win32ui.CreateBitmap()  
-        #MoniterDev=win32api.EnumDisplayMonitors(None,None) 
-        #w = args[2]
-        #h = args[3]
-        #print w,h　　　#图片大小 
+        l,t,r,b=self.getWinRect(handle)
+        w=r-l
+        h=b-t
+        saveBitMap.CreateCompatibleBitmap(mfcDC, w,h)
+        saveDC.SelectObject(saveBitMap)  
+        #saveDC.BitBlt((0,0),(w, h) , mfcDC, (l,t), win32con.SRCCOPY)   
+        
+        try:
+            while True:
+                saveDC.BitBlt((0,0),(w, h) , mfcDC, (0,0), win32con.SRCCOPY)
+                datenow=datetime.datetime.now()
+                filePrx="%s/%d"%(fileDir,handle)
+                bmpname=filePrx+".bmp"       
+                saveBitMap.SaveBitmapFile(saveDC, bmpname)
+                pic = Image.open(bmpname)
+                picNew=pic.crop((0,0,w,h))
+                os.remove(bmpname)
+                #return picNew  #如果是视频模式，直接返回
+                #pic=self.WinCapture(handle,fileDir)
+                imm=cv2.cvtColor(np.array(picNew), cv2.COLOR_RGB2BGR)
+                video.write(imm)
+                #pic.close() 
+                #win32gui.DeleteObject(handle)
+                time.sleep(0.01)               
+        except Exception as e:
+            print(e)
+        finally:
+            video.release()
+                    
+    #截屏并保存
+    #间隔指定时间截屏
+    #默认的文件名保存为handle_time.jepg;
+    #time为YYYYmmddHHMMDDSSsss;
+    def WinCaptureByTime(self,handle,secs,fileDir,saveFlag=1):
+        while True:
+            self.WinCapture(handle,fileDir,saveFlag)
+            time.sleep(secs/1000)        
+
+    def WinCapture(self,handle,fileDir,saveFlag=0):
+        hwnd = handle
+        hwndDC = win32gui.GetWindowDC(hwnd)  
+        mfcDC=win32ui.CreateDCFromHandle(hwndDC)  
+        saveDC=mfcDC.CreateCompatibleDC()  
+        saveBitMap = win32ui.CreateBitmap()  
         l,t,r,b=self.getWinRect(handle)
         w=r-l
         h=b-t
@@ -53,9 +98,13 @@ class ScreenShot(object):
         cc=time.time()
         secs=(cc-int(cc))*1000
         filePrx="%s/%d_%s%03d"%(fileDir,handle,datenow.strftime("%Y%m%d%H%M%S"),secs)
-        bmpname=filePrx+".bmp"
+        bmpname=filePrx+".bmp"       
         saveBitMap.SaveBitmapFile(saveDC, bmpname)
         pic = Image.open(bmpname)
+        if saveFlag==0:
+            picNew=pic.crop((0,0,w,h))
+            os.remove(bmpname)
+            return picNew  #如果是视频模式，直接返回
         fileName=filePrx+".jpeg"
         pic.save(os.path.join(fileDir,fileName), 'jpeg')
         os.remove(bmpname)
