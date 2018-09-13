@@ -1,0 +1,14 @@
+prefix=./libout
+exec_prefix=${prefix}
+libdir=./libout/lib
+includedir=./libout/include
+
+Name: libavutil
+Description: FFmpeg utility library
+Version: 56.19.100
+Requires: 
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lavutil 
+Libs.private: -lm -luser32
+Cflags: -I${includedir}

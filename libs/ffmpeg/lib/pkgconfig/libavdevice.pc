@@ -1,0 +1,14 @@
+prefix=./libout
+exec_prefix=${prefix}
+libdir=./libout/lib
+includedir=./libout/include
+
+Name: libavdevice
+Description: FFmpeg device handling library
+Version: 58.4.101
+Requires: 
+Requires.private: libavfilter >= 7.26.100, libswscale >= 5.2.100, libavformat >= 58.17.103, libavcodec >= 58.27.100, libswresample >= 3.2.100, libavutil >= 56.19.100
+Conflicts:
+Libs: -L${libdir}  -lavdevice 
+Libs.private: -lgdi32 -lm -lvfw32
+Cflags: -I${includedir}

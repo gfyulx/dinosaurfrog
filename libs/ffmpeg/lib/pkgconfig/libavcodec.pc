@@ -1,0 +1,14 @@
+prefix=./libout
+exec_prefix=${prefix}
+libdir=./libout/lib
+includedir=./libout/include
+
+Name: libavcodec
+Description: FFmpeg codec library
+Version: 58.27.100
+Requires: 
+Requires.private: libswresample >= 3.2.100, libavutil >= 56.19.100
+Conflicts:
+Libs: -L${libdir}  -lavcodec 
+Libs.private: -liconv -lm
+Cflags: -I${includedir}

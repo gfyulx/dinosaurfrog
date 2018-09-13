@@ -1,0 +1,14 @@
+prefix=./libout
+exec_prefix=${prefix}
+libdir=./libout/lib
+includedir=./libout/include
+
+Name: libavfilter
+Description: FFmpeg audio/video filtering library
+Version: 7.26.100
+Requires: 
+Requires.private: libswscale >= 5.2.100, libavformat >= 58.17.103, libavcodec >= 58.27.100, libswresample >= 3.2.100, libavutil >= 56.19.100
+Conflicts:
+Libs: -L${libdir}  -lavfilter 
+Libs.private: -lm
+Cflags: -I${includedir}
