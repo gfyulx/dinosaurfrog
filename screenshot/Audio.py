@@ -36,19 +36,21 @@ class Audio:
         secsl=(cc-int(cc))*1000
         filePrx="%s/%s%03d"%(fileDir,datenow.strftime("%Y%m%d%H%M%S"),secsl)
         fileName="%s%s"%(filePrx,".wav")
-        stream=pa.open(format = paInt16,channels=self.channels,  #input_device_index为设备索引
-                   rate=self.frameRate,input=True,input_device_index=4,
+        try:
+            stream=pa.open(format = paInt16,channels=self.channels,  #input_device_index为设备索引
+                   rate=self.frameRate,input=True,input_device_index=1,
                    frames_per_buffer=self.frameRate)
-        my_buf=[]   
-        tB=time.time()
-        tE=time.time()
-        while tE-tB<sec/1000:  #sec为毫秒
-            string_audio_data = stream.read(self.frameRate)
-            my_buf.append(string_audio_data)
-            print('.')
+            my_buf=[]   
+            tB=time.time()
             tE=time.time()
-        self.save_wave_file(fileName,my_buf)
-        stream.close()
+            while tE-tB<sec/1000:  #sec为毫秒
+                string_audio_data = stream.read(self.frameRate)
+                my_buf.append(string_audio_data)
+                print('.')
+                tE=time.time()
+            self.save_wave_file(fileName,my_buf)
+        finally:
+            stream.close()
 
     def play(self,fileName):
         chunk=1024  #每次读取时的块数量
