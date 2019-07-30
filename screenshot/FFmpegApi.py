@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     # ret=dllHandler.avcodec_configuration()
     avdeviceHandler.avdevice_register_all()
-    audioDevices = avdev iceHandler.avdevice_configuration()
+    audioDevices = avdeviceHandler.avdevice_configuration()
     # 设置AVFormatContext格式的变量
     avformatContext = avformatHandler.avformat_alloc_context()
     # 设置设备返回值列表
