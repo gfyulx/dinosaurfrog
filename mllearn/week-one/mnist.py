@@ -10,9 +10,6 @@ import tensorflow as tf
 import tensorflow.examples.tutorials.mnist.input_data as input_data
 
 
-
-
-
 def weight_variable(shape):
     initial = tf.truncated_normal(shape, stddev=0.1)  # 为shape填充正太分布标准差在0.1*2内的随机值
     return tf.Variable(initial)
@@ -39,8 +36,6 @@ def max_pool_2x2(x):
 def MNISTV2():
     mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
     x = tf.placeholder("float", [None, 784])
-    W = tf.Variable(tf.zeros([784, 10]))
-    b = tf.Variable(tf.zeros([10]))
     y_ = tf.placeholder("float", [None, 10])  # 实际值
 
     gpu_options = tf.GPUOptions(allow_growth=True)  # 设置gpu显示根据需要自动增长，默认为申请所有显存
@@ -82,7 +77,7 @@ def MNISTV2():
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))  # cast转为float后求平均值
     init = tf.global_variables_initializer()
     sess.run(init)
-    for i in range(20000):
+    for i in range(100):
         batch = mnist.train.next_batch(50)
         if i % 100 == 0:
             train_accuracy = accuracy.eval(feed_dict={
@@ -90,7 +85,58 @@ def MNISTV2():
             print("step %d, training accuracy %g" % (i, train_accuracy))
         sess.run(train_step, feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
     print("test accuracy %g" % accuracy.eval(feed_dict={
-        x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0},session=sess))
+        x: mnist.test.images[:1000], y_: mnist.test.labels[:1000], keep_prob: 1.0},session=sess))
+    saver=tf.train.Saver()
+    save_path=saver.save(sess,"model/model.ckpt")
+#测试从模型中恢复
+def recover():
+    mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
+    x = tf.placeholder("float", [None, 784])
+    y_ = tf.placeholder("float", [None, 10])  # 实际值
+
+    gpu_options = tf.GPUOptions(allow_growth=True)  # 设置gpu显示根据需要自动增长，默认为申请所有显存
+    # gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.4) #设置使用的显示比例
+    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
+    W_conv1 = weight_variable([5, 5, 1, 32])  # 卷积核定义，输出为32通道。 --定义了32个特征数组
+    b_conv1 = bias_variable([32])
+    x_image = tf.reshape(x, [-1, 28, 28, 1])
+
+    h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)  # 输出为28*28*32
+    h_pool1 = max_pool_2x2(h_conv1)  # 输出为14*14*32 #第一层，卷积+最大池化
+
+    # 第二层
+    W_conv2 = weight_variable([5, 5, 32, 64])  # 输入为32通道，输出为64输出通道，即64个特征。
+    b_conv2 = bias_variable([64])
+
+    h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)  # 输出为14*14*64
+    h_pool2 = max_pool_2x2(h_conv2)  # 输出为7*7*64
+
+    # 全连接层1
+    W_fc1 = weight_variable([7 * 7 * 64, 1024])
+    b_fc1 = bias_variable([1024])
+
+    h_pool2_flat = tf.reshape(h_pool2, [-1, 7 * 7 * 64])  # reshape里-1代表自动计算维度
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+    # dropout防止过拟合
+    keep_prob = tf.placeholder("float")
+    h_fcl_drop = tf.nn.dropout(h_fc1, rate=1 - keep_prob)
+    # 输出层
+    W_fc2 = weight_variable([1024, 10])
+    b_fc2 = bias_variable([10])
+    y_conv = tf.nn.softmax(tf.matmul(h_fcl_drop, W_fc2) + b_fc2)
+
+    # 测试评估
+    cross_entropy = -tf.reduce_sum(y_ * tf.log(y_conv))
+    train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)  # 使用Adam梯度下降
+    correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))  # 取aixs=N维中的最大值的索引
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))  # cast转为float后求平均值
+    init = tf.global_variables_initializer()
+    sess.run(init)
+    saver=tf.train.Saver()   #恢复模型，并测试
+    saver.restore(sess,"model/model.ckpt")
+    print("test accuracy %g" % accuracy.eval(feed_dict={
+        x: mnist.test.images[:1000], y_: mnist.test.labels[:1000], keep_prob: 1.0}, session=sess))
 
 
 # v1t版本的mnist 约91%
@@ -119,4 +165,5 @@ def MNISTV1():
 
 
 if __name__ == '__main__':
-    MNISTV2()
+    #MNISTV2()
+    recover()
