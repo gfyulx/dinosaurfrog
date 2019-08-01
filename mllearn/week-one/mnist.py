@@ -6,6 +6,8 @@
 # @description: mnist分类
 
 import tensorflow as tf
+import numpy as np
+from PIL import Image
 
 import tensorflow.examples.tutorials.mnist.input_data as input_data
 
@@ -135,10 +137,21 @@ def recover():
     sess.run(init)
     saver=tf.train.Saver()   #恢复模型，并测试
     saver.restore(sess,"model/model.ckpt")
-    print("test accuracy %g" % accuracy.eval(feed_dict={
-        x: mnist.test.images[:1000], y_: mnist.test.labels[:1000], keep_prob: 1.0}, session=sess))
+    # print("test accuracy %g" % accuracy.eval(feed_dict={
+    #     x: mnist.test.images[:1000], y_: mnist.test.labels[:1000], keep_prob: 1.0}, session=sess))
+    # #给一幅图片，测试输出
+    result=tf.argmax(y_conv,1)
+    fileName="test_3.jpg"   #label=1  默认为4通道，转为灰度
+    image_raw = tf.io.gfile.GFile(fileName, 'rb').read()
+    image_raw = tf.image.decode_png(image_raw)
+    image_raw=tf.image.rgb_to_grayscale(image_raw)
+    input=tf.image.resize(image_raw,[28,28],method=0)
+    input=np.asarray(input.eval(session=sess),dtype='float')
+    input=np.reshape(input,[-1,784])
+    print("result", sess.run(result, feed_dict={x: input, keep_prob: 1.0}))
 
-
+    #print("result",sess.run(result,feed_dict={x: mnist.test.images[:10],keep_prob:1.0}))
+    #print("label",mnist.test.labels[:10])
 # v1t版本的mnist 约91%
 def MNISTV1():
     mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
