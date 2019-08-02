@@ -45,6 +45,7 @@ def MNISTV2():
     sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
     W_conv1 = weight_variable([5, 5, 1, 32])  # 卷积核定义，输出为32通道。 --定义了32个特征数组
+    #tf.summary.histogram('w_conv1', W_conv1)   #tfboard中查看变量的变化
     b_conv1 = bias_variable([32])
     x_image = tf.reshape(x, [-1, 28, 28, 1])
 
@@ -74,10 +75,13 @@ def MNISTV2():
 
     # 测试评估
     cross_entropy = -tf.reduce_sum(y_ * tf.log(y_conv))
+    tf.summary.scalar('loss', cross_entropy)
     train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)  # 使用Adam梯度下降
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))  # 取aixs=N维中的最大值的索引
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))  # cast转为float后求平均值
     init = tf.global_variables_initializer()
+    merged = tf.summary.merge_all()
+    writer=tf.summary.FileWriter("logs/",sess.graph)
     sess.run(init)
     for i in range(100):
         batch = mnist.train.next_batch(50)
@@ -86,10 +90,12 @@ def MNISTV2():
                 x: batch[0], y_: batch[1], keep_prob: 1.0},session=sess)
             print("step %d, training accuracy %g" % (i, train_accuracy))
         sess.run(train_step, feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
+        rs = sess.run(merged,feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
+        writer.add_summary(rs, i)
     print("test accuracy %g" % accuracy.eval(feed_dict={
         x: mnist.test.images[:1000], y_: mnist.test.labels[:1000], keep_prob: 1.0},session=sess))
     saver=tf.train.Saver()
-    save_path=saver.save(sess,"model/model.ckpt")
+    #save_path=saver.save(sess,"model/model.ckpt")
 #测试从模型中恢复
 def recover():
     mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
@@ -141,7 +147,7 @@ def recover():
     #     x: mnist.test.images[:1000], y_: mnist.test.labels[:1000], keep_prob: 1.0}, session=sess))
     # #给一幅图片，测试输出
     result=tf.argmax(y_conv,1)
-    fileName="test_3.jpg"   #label=1  默认为4通道，转为灰度
+    fileName="test_3.jpg"   #label=1  默认为3通道，转为灰度
     image_raw = tf.io.gfile.GFile(fileName, 'rb').read()
     image_raw = tf.image.decode_png(image_raw)
     image_raw=tf.image.rgb_to_grayscale(image_raw)
@@ -178,5 +184,5 @@ def MNISTV1():
 
 
 if __name__ == '__main__':
-    #MNISTV2()
-    recover()
+    MNISTV2()
+    #recover()
