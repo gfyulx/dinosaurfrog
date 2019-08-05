@@ -23,6 +23,7 @@ from tensorflow.python.platform import gfile
 FLAGS = tf.app.flags.FLAGS  # 定义tensorflow的变量定义 dict
 
 tf.app.flags.DEFINE_string('train_dir', "./logs/cifar", '训练日志目录')
+tf.app.flags.DEFINE_string('model_dir', "./model/cifar", '模型保存目录')
 tf.app.flags.DEFINE_integer("max_steps", 10000, '最大训练次数')
 tf.app.flags.DEFINE_boolean('log_device_placement', False, '')
 
@@ -60,6 +61,8 @@ def dataCheck():
     destDir = FLAGS.data_dir()
     if not os.path.exists(destDir):
         os.mkdir(destDir)
+    if not os.path.exists(FLAGS.model_dir):
+        os.mkdir(FLAGS.model_dir)
     fileName = DATA_URL.split('/')[-1]
     filePath = os.path.join(destDir, fileName)
     if not os.path.exists(filePath):
@@ -404,8 +407,8 @@ for step in xrange(FLAGS.max_steps):
 
     # 定期保存模型检查点
     if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
-        checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
+        checkpoint_path = os.path.join(FLAGS.model_dir, 'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
 
-
+print("Success end train!")
 
