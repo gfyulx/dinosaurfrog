@@ -74,8 +74,8 @@ def dataCheck():
 def load_data(batch_size):
     if not FLAGS.data_dir:
         raise ValueError('data_dir must be set!')
-    data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
-    fileNames = [os.path.join(data_dir, 'data_batch_%d.bin' % i) for i in xrange(1, 6)]
+    data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-py')
+    fileNames = [os.path.join(data_dir, 'data_batch_%d' % i) for i in xrange(1, 6)]
     # 检查文件是否缺失
     for f in fileNames:
         if not gfile.Exists(f):
@@ -83,7 +83,7 @@ def load_data(batch_size):
     # 合并文件成sequence
     fileNameQueue = tf.train.string_input_producer(fileNames)
     read_input = read_cifar10(fileNameQueue)
-    reshaped_image = tf.cast(read_input.uint8images, tf.float32)
+    reshaped_image = tf.cast(read_input.uint8image, tf.float32)
     height = IMAGE_SIZE
     width = IMAGE_SIZE
 
@@ -132,7 +132,7 @@ def read_cifar10(filenameQueue):
     depth_major = tf.reshape(tf.slice(record_bytes, [label_bytes], [image_bytes]),
                              [result.depth, result.height, result.width])
     # 转换图片格式为height,width,depth
-    result.uint8image = tf.reshape(depth_major, [1, 2, 0])
+    result.uint8image = tf.transpose(depth_major, [1, 2, 0])
     return result
 
 
@@ -152,14 +152,14 @@ def interface(images):
     # 第一层conv1卷积层
     with tf.variable_scope('conv1') as scope:  # 为每层定义一个层名
         # 5*5卷积核 3通道，数量64个
-        kernel = _variable_with_weight_decay('weight', shape=[5, 5, 3, 64], stddev=1e-4, wd=0.0)
+        kernel = _variable_with_weight_decay('weights', shape=[5, 5, 3, 64], stddev=1e-4, wd=0.0)
         # 按kernel卷积核 ，1步长做卷积
         conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
         biases = _variable_on_cpu('baises', [64], tf.constant_initializer(0.0))
         # 为卷积操作加上偏置
         bias = tf.nn.bias_add(conv, biases)
-        # rule激活函数
-        conv1 = tf.nn.rule(bias, name=scope.name)
+        # relu
+        conv1 = tf.nn.relu(bias, name=scope.name)
         # 创建激活函数conv1r tfboard event summary
         _activation_summary(conv1)
 
@@ -174,7 +174,7 @@ def interface(images):
     # conv2
     with tf.variable_scope('conv2') as scope:
         # 卷积核 5*5,64个
-        kernel1 = _variable_with_weight_decay('weight', shape=[5, 5, 64, 64], stddev=1e-4, wd=0.0)
+        kernel = _variable_with_weight_decay('weights', shape=[5, 5, 64, 64], stddev=1e-4, wd=0.0)
         conv = tf.nn.conv2d(norm1, kernel, strides=[1, 1, 1, 1], padding='SAME')
         biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
         bias = tf.nn.bias_add(conv, biases)
@@ -194,14 +194,14 @@ def interface(images):
             dim *= d
         # 将单个样本的特征拼成列向量
         reshape = tf.reshape(pool2, [FLAGS.batch_size, dim])
-        weights = _variable_with_weight_decay('weight', shape=[dim, 384], stddev=0.04, wd=0.004)
+        weights = _variable_with_weight_decay('weights', shape=[dim, 384], stddev=0.04, wd=0.004)
         biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
         local3 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
         _activation_summary(local3)
 
     # local4-全连接层,192个节点
     with tf.variable_scope('local4') as scope:
-        weights = _variable_with_weight_decay('weight', shape=[384, 192], stddev=0.04, wd=0.004)
+        weights = _variable_with_weight_decay('weights', shape=[384, 192], stddev=0.04, wd=0.004)
         biases = _variable_on_cpu('biases', [192], tf.constant_initializer(0.1))
         local4 = tf.nn.relu(tf.matmul(local3, weights) + biases, name=scope.name)
         _activation_summary(local4)
@@ -320,7 +320,7 @@ def train(total_loss, global_step):
         opt = tf.train.GradientDescentOptimizer(lr)
         grads = opt.compute_gradients(total_loss)
 
-    apply_gradient_op = opt.apply_gradient(grads, global_step=global_step)
+    apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
 
     # 添加训练直方图
     for var in tf.trainable_variables():
@@ -367,7 +367,7 @@ loss = loss(logits, labels)
 train_op=train(loss,global_step)
 #开始训练
 
-saver=tf.train.Saver(tf.all_variables())
+saver=tf.train.Saver(tf.global_variables())
 summary_op=tf.summary.merge_all()
 
 init=tf.global_variables_initializer()
@@ -377,7 +377,7 @@ sess.run(init)
 
 # 调用run或者eval去执行read之前，必须调用tf.train.start_queue_runners来将文件名填充到队列.否则read操作会被阻塞到文件名队列中有值为止
 tf.train.start_queue_runners(sess=sess)
-summary_writer=tf.summary.FileWriter(FLAGS.train_dir,graph_def=sess.graph_def)
+summary_writer=tf.summary.FileWriter(FLAGS.train_dir,graph=sess.graph)
 
 for step in xrange(FLAGS.max_steps):
     start_time=time.time()
