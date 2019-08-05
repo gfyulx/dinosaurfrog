@@ -11,10 +11,11 @@ from six.moves import xrange
 import numpy as np
 import os.path
 import time
-import datetime
+from datetime import datetime
 import re
 import os
 import urllib
+from urllib import request
 import tarfile
 import tensorflow.python.platform
 from tensorflow.python.platform import gfile
@@ -58,13 +59,14 @@ INITIAL_LEARNING_RATE = 0.1  # Initial learning rate.
 def dataCheck():
     destDir = FLAGS.data_dir()
     if not os.path.exists(destDir):
-        os.mkdirs(destDir)
+        os.mkdir(destDir)
     fileName = DATA_URL.split('/')[-1]
     filePath = os.path.join(destDir, fileName)
     if not os.path.exists(filePath):
         # 文件不存在，尝试下载
         print("file not exists,downloading from url %s" % DATA_URL)
         filePath, _ = urllib.request.urlretrieve(DATA_URL, filePath)
+
         print("Successfully downloaded!")
         # 解压
         tarfile.open(filePath, 'r:gz').extractall(destDir)
@@ -74,8 +76,8 @@ def dataCheck():
 def load_data(batch_size):
     if not FLAGS.data_dir:
         raise ValueError('data_dir must be set!')
-    data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-py')
-    fileNames = [os.path.join(data_dir, 'data_batch_%d' % i) for i in xrange(1, 6)]
+    data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
+    fileNames = [os.path.join(data_dir, 'data_batch_%d.bin' % i) for i in xrange(1, 6)]
     # 检查文件是否缺失
     for f in fileNames:
         if not gfile.Exists(f):
@@ -83,6 +85,7 @@ def load_data(batch_size):
     # 合并文件成sequence
     fileNameQueue = tf.train.string_input_producer(fileNames)
     read_input = read_cifar10(fileNameQueue)
+
     reshaped_image = tf.cast(read_input.uint8image, tf.float32)
     height = IMAGE_SIZE
     width = IMAGE_SIZE
@@ -143,7 +146,7 @@ def _generate_image_and_label_batch(image, label, min_queue_examples, batch_size
                                                  num_threads=num_preprocess_threads,
                                                  capacity=min_queue_examples + 3 * batch_size,
                                                  min_after_dequeue=min_queue_examples)
-    tf.summary.image('images', image)
+    tf.summary.image('images', images)
     return images, tf.reshape(label_batch, [batch_size])
 
 
@@ -155,7 +158,7 @@ def interface(images):
         kernel = _variable_with_weight_decay('weights', shape=[5, 5, 3, 64], stddev=1e-4, wd=0.0)
         # 按kernel卷积核 ，1步长做卷积
         conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
-        biases = _variable_on_cpu('baises', [64], tf.constant_initializer(0.0))
+        biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
         # 为卷积操作加上偏置
         bias = tf.nn.bias_add(conv, biases)
         # relu
@@ -178,7 +181,7 @@ def interface(images):
         conv = tf.nn.conv2d(norm1, kernel, strides=[1, 1, 1, 1], padding='SAME')
         biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
         bias = tf.nn.bias_add(conv, biases)
-        conv2 = tf.nn.relu(bias, name='conv2')
+        conv2 = tf.nn.relu(bias, name=scope.name)
         _activation_summary(conv2)
 
     # norm2
@@ -208,9 +211,9 @@ def interface(images):
 
     # 最后输出层使用softmax
     with tf.variable_scope('softmax_linear') as scope:
-        weights = _variable_with_weight_decay('weight', shape=[192, NUM_CLASSES], stddev=1 / 192.0, wd=0.0)
+        weights = _variable_with_weight_decay('weights', shape=[192, NUM_CLASSES], stddev=1 / 192.0, wd=0.0)
         biases = _variable_on_cpu('biases', [NUM_CLASSES], tf.constant_initializer(0.0))
-        # 使用sotmax
+        # 使用sotmax,可使用tf.nn.softmax()
         softmax_linear = tf.add(tf.matmul(local4, weights), biases, name=scope.name)
         _activation_summary(softmax_linear)
     return softmax_linear
@@ -249,7 +252,7 @@ def _variable_on_cpu(name, shape, initializer):
     返回：
      变量张量
     '''
-    with tf.device('/cpu:0'):  # 用 with tf.device 创建一个设备环境, 这个环境下的 operation 都统一运行在环境指定的设备上.
+    with tf.device('/gpu:0'):  # 用 with tf.device 创建一个设备环境, 这个环境下的 operation 都统一运行在环境指定的设备上.
         var = tf.get_variable(name, shape, initializer=initializer)
     return var
 
@@ -284,8 +287,8 @@ def loss(logits, labels):
     labels = tf.cast(labels, tf.int64)
     # 计算交叉熵
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits,
-                                                                   name='cross_entropy_per_example')
-    cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
+                                                                   name='total_loss')
+    cross_entropy_mean = tf.reduce_mean(cross_entropy+1e-10, name='cross_entropy')
     tf.add_to_collection('losses', cross_entropy_mean)
 
     # 总损失定义为交叉熵加上所有权重的权重衰减项（L2)
@@ -354,7 +357,7 @@ def _add_loss_summaries(total_loss):
 
     #将损失添加到summary中预测
     for l in losses+[total_loss]:
-        tf.summary.scalar(l.op.name+'(raw)',l)
+        tf.summary.scalar(l.op.name+' (raw)',l)
         tf.summary.scalar(l.op.name,loss_averages.average(l))
 
     return loss_averages_op
@@ -371,8 +374,8 @@ saver=tf.train.Saver(tf.global_variables())
 summary_op=tf.summary.merge_all()
 
 init=tf.global_variables_initializer()
-
-sess=tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement))
+gpu_options = tf.GPUOptions(allow_growth=True)
+sess=tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement,gpu_options=gpu_options))
 sess.run(init)
 
 # 调用run或者eval去执行read之前，必须调用tf.train.start_queue_runners来将文件名填充到队列.否则read操作会被阻塞到文件名队列中有值为止
