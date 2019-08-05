@@ -27,7 +27,7 @@ def conv2d(x, W):
     # strides中[1,stride,stride,1]头尾固定为1,中间两个代表步长.
     # SAME表示边界不足时使用0填充，VALID时不填充直接丢弃不足的数据不计算。
     # x格式为[batch,in_height,in_weight,in_channel]，多通道输入，单通道输出时，通道值相加。
-    # w格式为[filter_height,filter_weight,in_channel,out_channel] 其中in_channel与x一致
+    # w格式为[filter_height,filter_weight,in_channel,out_channel] 其中in_channel与x一致 --卷积核面积，通道，数量
 
 
 def max_pool_2x2(x):
@@ -82,7 +82,7 @@ def MNISTV2():
     init = tf.global_variables_initializer()
     merged = tf.summary.merge_all()
     writer=tf.summary.FileWriter("logs/",sess.graph)
-    sess.run(init)
+    sess.run(init)()
     for i in range(100):
         batch = mnist.train.next_batch(50)
         if i % 100 == 0:
