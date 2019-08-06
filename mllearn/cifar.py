@@ -19,16 +19,19 @@ from urllib import request
 import tarfile
 import tensorflow.python.platform
 from tensorflow.python.platform import gfile
+import math
+
 
 FLAGS = tf.app.flags.FLAGS  # 定义tensorflow的变量定义 dict
 
 tf.app.flags.DEFINE_string('train_dir', "./logs/cifar", '训练日志目录')
 tf.app.flags.DEFINE_string('model_dir', "./model/cifar", '模型保存目录')
 tf.app.flags.DEFINE_integer("max_steps", 10000, '最大训练次数')
+tf.app.flags.DEFINE_integer("max_eval_step", 2000, '评估次数')
 tf.app.flags.DEFINE_boolean('log_device_placement', False, '')
 
 tf.app.flags.DEFINE_integer('batch_size', 64, '批次大小')
-tf.app.flags.DEFINE_string('data_dir', '../../data/cifar', '训练数据目录')
+tf.app.flags.DEFINE_string('data_dir', '../data/cifar', '训练数据目录')
 tf.app.flags.DEFINE_integer('log_frequency', 10, '输出日志间隔')
 
 DATA_URL = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
@@ -51,11 +54,11 @@ NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
 
 TOWER_NAME = 'tower'
 
-
 MOVING_AVERAGE_DECAY = 0.9999  # The decay to use for the moving average.
 NUM_EPOCHS_PER_DECAY = 350.0  # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
 INITIAL_LEARNING_RATE = 0.1  # Initial learning rate.
+
 
 def dataCheck():
     destDir = FLAGS.data_dir()
@@ -75,12 +78,17 @@ def dataCheck():
         tarfile.open(filePath, 'r:gz').extractall(destDir)
 
 
-# 按批次加载数据
-def load_data(batch_size):
+# 按批次加载数据,eval_flag：是否加载评估数据集
+def load_data(eval_flag, batch_size):
     if not FLAGS.data_dir:
         raise ValueError('data_dir must be set!')
-    data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
-    fileNames = [os.path.join(data_dir, 'data_batch_%d.bin' % i) for i in xrange(1, 6)]
+    if eval_flag:
+        fileNames = [os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin/test_batch.bin')]
+        num_examples_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
+    else:
+        data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
+        fileNames = [os.path.join(data_dir, 'data_batch_%d.bin' % i) for i in xrange(1, 6)]
+        num_examples_per_epoch=NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
     # 检查文件是否缺失
     for f in fileNames:
         if not gfile.Exists(f):
@@ -95,16 +103,18 @@ def load_data(batch_size):
 
     # 随机裁剪图像，增加训练模型的鲁棒性
     distorted_images = tf.random_crop(reshaped_image, [height, width, 3])  # 28*28*3的图片
-    distorted_images = tf.image.random_flip_left_right(distorted_images)  # 随机水平翻转图片
-    distorted_images = tf.image.random_brightness(distorted_images, max_delta=63)  # 随机调整亮度
-    distorted_images = tf.image.random_contrast(distorted_images, lower=0.2, upper=1.8)  # 随机调度对比度
+    if not eval_flag:  #如果是加载训练数据集，添加数据集扩展操作
+        distorted_images = tf.image.random_flip_left_right(distorted_images)  # 随机水平翻转图片
+        distorted_images = tf.image.random_brightness(distorted_images, max_delta=63)  # 随机调整亮度
+        distorted_images = tf.image.random_contrast(distorted_images, lower=0.2, upper=1.8)  # 随机调度对比度
+
     float_image = tf.image.per_image_standardization(distorted_images)  # 白化操作
 
     float_image.set_shape([height, width, 3])
     read_input.label.set_shape([1])
 
     min_fraction_of_examples_in_queue = 0.4
-    min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN * min_fraction_of_examples_in_queue)
+    min_queue_examples = int(num_examples_per_epoch * min_fraction_of_examples_in_queue)
 
     # 返回一个样本队列image,labels
     return _generate_image_and_label_batch(float_image, read_input.label, min_queue_examples, batch_size)
@@ -291,11 +301,12 @@ def loss(logits, labels):
     # 计算交叉熵
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits,
                                                                    name='total_loss')
-    cross_entropy_mean = tf.reduce_mean(cross_entropy+1e-10, name='cross_entropy')
+    cross_entropy_mean = tf.reduce_mean(cross_entropy + 1e-10, name='cross_entropy')
     tf.add_to_collection('losses', cross_entropy_mean)
 
     # 总损失定义为交叉熵加上所有权重的权重衰减项（L2)
     return tf.add_n(tf.get_collection('losses'), name='total_loss')
+
 
 def train(total_loss, global_step):
     '''
@@ -337,12 +348,13 @@ def train(total_loss, global_step):
         if grad is not None:
             tf.summary.histogram(var.op.name + '/gradients', grad)
 
-    #跟踪变量移动平均值
-    variable_averages=tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY,global_step)
+    # 跟踪变量移动平均值
+    variable_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
     with tf.control_dependencies([apply_gradient_op]):
-        variable_averages_op=variable_averages.apply(tf.trainable_variables())
+        variable_averages_op = variable_averages.apply(tf.trainable_variables())
 
     return variable_averages_op
+
 
 def _add_loss_summaries(total_loss):
     '''
@@ -354,61 +366,104 @@ def _add_loss_summaries(total_loss):
     返回：
      loss_averages_op：用于生成移动平均的损失
     '''
-    loss_averages=tf.train.ExponentialMovingAverage(0.9,name='avg')
-    losses=tf.get_collection('losses')
-    loss_averages_op=loss_averages.apply(losses+[total_loss])
+    loss_averages = tf.train.ExponentialMovingAverage(0.9, name='avg')
+    losses = tf.get_collection('losses')
+    loss_averages_op = loss_averages.apply(losses + [total_loss])
 
-    #将损失添加到summary中预测
-    for l in losses+[total_loss]:
-        tf.summary.scalar(l.op.name+' (raw)',l)
-        tf.summary.scalar(l.op.name,loss_averages.average(l))
+    # 将损失添加到summary中预测
+    for l in losses + [total_loss]:
+        tf.summary.scalar(l.op.name + ' (raw)', l)
+        tf.summary.scalar(l.op.name, loss_averages.average(l))
 
     return loss_averages_op
 
 
-####main#####
-images, labels = load_data(batch_size=FLAGS.batch_size)
-logits = interface(images)
-loss = loss(logits, labels)
-train_op=train(loss,global_step)
-#开始训练
+def main():
+    ####main#####
+    images, labels = load_data(0,batch_size=FLAGS.batch_size)  #加载训练数据集
+    logits = interface(images)  # 分类模型
+    losses = loss(logits, labels)
+    train_op = train(losses, global_step)
+    # 开始训练
 
-saver=tf.train.Saver(tf.global_variables())
-summary_op=tf.summary.merge_all()
+    saver = tf.train.Saver(tf.global_variables())
+    summary_op = tf.summary.merge_all()
 
-init=tf.global_variables_initializer()
-gpu_options = tf.GPUOptions(allow_growth=True)
-sess=tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement,gpu_options=gpu_options))
-sess.run(init)
+    init = tf.global_variables_initializer()
+    gpu_options = tf.GPUOptions(allow_growth=True)
+    sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement, gpu_options=gpu_options))
+    sess.run(init)
 
-# 调用run或者eval去执行read之前，必须调用tf.train.start_queue_runners来将文件名填充到队列.否则read操作会被阻塞到文件名队列中有值为止
-tf.train.start_queue_runners(sess=sess)
-summary_writer=tf.summary.FileWriter(FLAGS.train_dir,graph=sess.graph)
+    # 调用run或者eval去执行read之前，必须调用tf.train.start_queue_runners来将文件名填充到队列.否则read操作会被阻塞到文件名队列中有值为止
+    tf.train.start_queue_runners(sess=sess)
+    summary_writer = tf.summary.FileWriter(FLAGS.train_dir, graph=sess.graph)
 
-for step in xrange(FLAGS.max_steps):
-    start_time=time.time()
-    _,loss_value=sess.run([train_op,loss])
-    duration=time.time()-start_time
-    assert not np.isnan(loss_value),'Model diverged with loss=NaN'
+    for step in xrange(FLAGS.max_steps):
+        start_time = time.time()
+        _, loss_value = sess.run([train_op, losses])
+        duration = time.time() - start_time
+        assert not np.isnan(loss_value), 'Model diverged with loss=NaN'
 
-    if step % 100 ==0:
-        num_example_per_step=FLAGS.batch_size
-        examples_per_sec=num_example_per_step/duration
-        sec_per_batch=float(duration)
-        format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
-                      'sec/batch)')
-        print (format_str % (datetime.now(), step, loss_value,
-                             examples_per_sec, sec_per_batch))
+        if step % 100 == 0:
+            num_example_per_step = FLAGS.batch_size
+            examples_per_sec = num_example_per_step / duration
+            sec_per_batch = float(duration)
+            format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
+                          'sec/batch)')
+            print(format_str % (datetime.now(), step, loss_value,
+                                examples_per_sec, sec_per_batch))
 
-    if step % 1000 == 0:
-        # 添加summary日志
-        summary_str = sess.run(summary_op)
-        summary_writer.add_summary(summary_str, step)
+        if step % 1000 == 0:
+            # 添加summary日志
+            summary_str = sess.run(summary_op)
+            summary_writer.add_summary(summary_str, step)
 
-    # 定期保存模型检查点
-    if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
-        checkpoint_path = os.path.join(FLAGS.model_dir, 'model.ckpt')
-        saver.save(sess, checkpoint_path, global_step=step)
+        # 定期保存模型检查点
+        if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
+            checkpoint_path = os.path.join(FLAGS.model_dir, 'model.ckpt')
+            saver.save(sess, checkpoint_path, global_step=step)
+    summary_writer.close()
+    print("Success end train!")
+def evaluate():
+    print("begin evaluate")
+    # 加载测试集评估准确率
+    images, labels = load_data(1,batch_size=FLAGS.batch_size)
+    test_logits = interface(images)  # 加载模型图
+    in_top_k_op = tf.nn.in_top_k(test_logits, labels, 1)  # 判断返回结果与lebels是否相等
+    true_count = 0
+    num_iter=int(math.ceil(NUM_EXAMPLES_PER_EPOCH_FOR_EVAL/FLAGS.batch_size))
+    total_sample_count=num_iter*FLAGS.batch_size
+    saver = tf.train.Saver(tf.global_variables())
+    summary_op = tf.summary.merge_all()
+    init = tf.global_variables_initializer()
+    gpu_options = tf.GPUOptions(allow_growth=True)
+    coord = tf.train.Coordinator()
+    sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement, gpu_options=gpu_options))
+    sess.run(init)
+    queue_runner=tf.train.start_queue_runners(sess=sess,coord=coord)   #这里如果不定义coord = tf.train.Coordinator()可能出现程序结束，但子进程的数据队列仍存在的问题
+    # summary_writer = tf.summary.FileWriter(FLAGS.train_dir, graph=sess.graph)
+    #saver=tf.train.Saver()   #恢复模型，并测试
+    saver.restore(sess,"model/cifar/model.ckpt")
+    for step in xrange(num_iter):
+        predictions = sess.run([in_top_k_op])
+        true_count += np.sum(predictions)
+    coord.request_stop()
+    coord.join(queue_runner)
+    precision = true_count / total_sample_count
+    print("%s:precision = %.3f" % (datetime.now(),precision))
 
-print("Success end train!")
 
+# 使用
+def classify(image):
+    logists=interface(image)
+    saver = tf.train.Saver(tf.global_variables())
+    summary_op = tf.summary.merge_all()
+    init = tf.global_variables_initializer()
+    gpu_options = tf.GPUOptions(allow_growth=True)
+    sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement, gpu_options=gpu_options))
+    sess.run(init)
+    saver.restore(sess,"model/cifar/model.ckpt")
+    return sess.run([logists])
+
+if __name__ == '__main__':
+    evaluate()
