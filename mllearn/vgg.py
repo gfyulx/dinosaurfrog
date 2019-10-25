@@ -102,6 +102,7 @@ def read_and_decode(fileName):
     # features =reader.map(parse_map)
     features = tf.io.parse_single_example(serialized_sample, features={'image': tf.io.FixedLenFeature([], tf.string),
                                                                        'label': tf.io.FixedLenFeature([], tf.int64),
+
                                                                        'filename': tf.io.FixedLenFeature([], tf.string)})
 
     # print(features)
@@ -281,7 +282,6 @@ def classify():
     predicted = tf.nn.softmax(feature_op)
 
     gpu_options = tf.GPUOptions(allow_growth=True)
-
     init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     saver = tf.train.Saver(tf.global_variables())
     sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))

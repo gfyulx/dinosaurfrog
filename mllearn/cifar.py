@@ -35,7 +35,7 @@ tf.app.flags.DEFINE_string('data_dir', '../data/cifar', '训练数据目录')
 tf.app.flags.DEFINE_integer('log_frequency', 10, '输出日志间隔')
 
 DATA_URL = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
-# "https://www.jianshu.com/p/4ed7f7b15736""
+
 # 清理目录
 if gfile.Exists(FLAGS.train_dir):
     gfile.DeleteRecursively(FLAGS.train_dir)
@@ -443,7 +443,7 @@ def evaluate():
     queue_runner=tf.train.start_queue_runners(sess=sess,coord=coord)   #这里如果不定义coord = tf.train.Coordinator()可能出现程序结束，但子进程的数据队列仍存在的问题
     # summary_writer = tf.summary.FileWriter(FLAGS.train_dir, graph=sess.graph)
     #saver=tf.train.Saver()   #恢复模型，并测试
-    saver.restore(sess,"model/cifar/model.ckpt")
+    saver.restore(sess,"model/cifar/model.ckpt-110000")
     for step in xrange(num_iter):
         predictions = sess.run([in_top_k_op])
         true_count += np.sum(predictions)
@@ -462,8 +462,11 @@ def classify(image):
     gpu_options = tf.GPUOptions(allow_growth=True)
     sess = tf.Session(config=tf.ConfigProto(log_device_placement=FLAGS.log_device_placement, gpu_options=gpu_options))
     sess.run(init)
-    saver.restore(sess,"model/cifar/model.ckpt")
+    saver.restore(sess,"model/cifar/model.ckpt-90000")
     return sess.run([logists])
 
 if __name__ == '__main__':
     evaluate()
+    ##
+    ##使用0.1的速率训练200000次，准确率约为0.806，损失函数稳定至0.5
+    ##

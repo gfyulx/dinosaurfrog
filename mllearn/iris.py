@@ -10,8 +10,8 @@ import tensorflow as tf
 
 
 CSV_COLUMN_NAMES = ['SepalLength','SepalWidth','PetalLength', 'PetalWidth', 'Species']
-data_train = pd.read_csv("../../data/iris_training.csv",names= CSV_COLUMN_NAMES,header=0)
-data_test = pd.read_csv("../../data/iris_test.csv",names=CSV_COLUMN_NAMES, header=0)
+data_train = pd.read_csv("../data/iris_training.csv",names= CSV_COLUMN_NAMES,header=0)
+data_test = pd.read_csv("../data/iris_test.csv",names=CSV_COLUMN_NAMES, header=0)
 
 train_x,train_y=data_train,data_train.pop("Species")
 test_x,test_y=data_test,data_test.pop("Species")
