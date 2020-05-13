@@ -7,8 +7,9 @@
 
 import os
 import datetime
-from utils.globalVariable import *
-
+from utils.global_variable import *
+import json
+import numpy as np
 
 def mkdir(*paths):
     for path in paths:
@@ -61,3 +62,18 @@ def formatException(e):
 
 def systemIsDebug():
     return (CONFIG.get("ENV", "debug").lower() == "true")
+
+
+
+class extJsonEncoder(json.JSONEncoder):
+    """
+    support json encode array and bytes
+    """
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, bytes):
+            return str(obj, encoding=DATA_ENCODING.utf.value)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        return json.JSONEncoder.default(self, obj)

@@ -8,11 +8,14 @@
 from enum import Enum
 import time
 import configparser
-
+from . import __version__
 
 
 SYS_START_TIME = time.strftime("%Y-%m-%d %H:%M:%S")
 CONFIG = configparser.ConfigParser()
+PROJECT_NAME = "DI"
+
+PROJECT_VERSION = str(__version__)
 
 
 
@@ -23,3 +26,10 @@ class LOG_LEVEL(Enum):
     INFO = "INFO"
     WARN = "WARN"
     ERROR = "ERROR"
+
+class DATA_ENCODING(Enum):
+    """
+    define data encode type
+    """
+    utf = "utf-8"
+    gbk = "gbk"
