@@ -26,8 +26,8 @@ FLAGS = tf.app.flags.FLAGS  # 定义tensorflow的变量定义 dict
 
 tf.app.flags.DEFINE_string('train_dir', "./logs/cifar", '训练日志目录')
 tf.app.flags.DEFINE_string('model_dir', "./model/cifar", '模型保存目录')
-tf.app.flags.DEFINE_integer("max_steps", 10000, '最大训练次数')
-tf.app.flags.DEFINE_integer("max_eval_step", 2000, '评估次数')
+tf.app.flags.DEFINE_integer("max_steps", 100, '最大训练次数')
+tf.app.flags.DEFINE_integer("max_eval_step", 200, '评估次数')
 tf.app.flags.DEFINE_boolean('log_device_placement', False, '')
 
 tf.app.flags.DEFINE_integer('batch_size', 64, '批次大小')
@@ -466,7 +466,8 @@ def classify(image):
     return sess.run([logists])
 
 if __name__ == '__main__':
-    evaluate()
+    main()
+    #evaluate()
     ##
     ##使用0.1的速率训练200000次，准确率约为0.806，损失函数稳定至0.5
     ##

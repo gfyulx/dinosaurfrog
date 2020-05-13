@@ -42,7 +42,8 @@ def MNISTV2():
 
     gpu_options = tf.GPUOptions(allow_growth=True)  # 设置gpu显示根据需要自动增长，默认为申请所有显存
     # gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.4) #设置使用的显示比例
-    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,allow_soft_placement=True,
+                                     log_device_placement=True))
 
     W_conv1 = weight_variable([5, 5, 1, 32])  # 卷积核定义，输出为32通道。 --定义了32个特征数组
     #tf.summary.histogram('w_conv1', W_conv1)   #tfboard中查看变量的变化
@@ -82,7 +83,7 @@ def MNISTV2():
     init = tf.global_variables_initializer()
     merged = tf.summary.merge_all()
     writer=tf.summary.FileWriter("logs/",sess.graph)
-    sess.run(init)()
+    sess.run(init)
     for i in range(100):
         batch = mnist.train.next_batch(50)
         if i % 100 == 0:

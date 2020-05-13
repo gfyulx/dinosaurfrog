@@ -1,0 +1,96 @@
+
+apiVersion: kubeflow.org/v1beta2
+kind: TFJob
+metadata:
+  name: "inceptionv4"
+  namespace: kubeflow
+spec:
+  cleanPodPolicy: None
+  tfReplicaSpecs:
+    Worker:
+      replicas: 2
+      restartPolicy: Never
+      template:
+        spec:
+          containers:
+          - args: ["/Computer/inceptionv4.py"]
+            command: ["python3"]
+            image: compute-gpu:v2.3
+            imagePullPolicy: IfNotPresent
+            name: tensorflow
+            ports:
+            - containerPort: 9081
+              protocol: TCP
+            resources:
+              limits:
+                nvidia.com/gpu: 1
+            volumeMounts:
+            - mountPath: "/Computer"
+              name: codepvc
+            - mountPath: "/etc/localtime"
+              name: timepvc
+          volumes:
+          - glusterfs:
+              endpoints: "glusterfs-cluster"
+              path: "aifs/demo"
+            name: codepvc
+          - hostPath:
+              path: "/usr/share/zoneinfo/Asia/Shanghai"
+            name: timepvc
+    Chief:
+      replicas: 1
+      restartPolicy: Never
+      template:
+        spec:
+          containers:
+          - args: ["/Computer/inceptionv4.py"]
+            command: ["python3"]
+            image: compute-gpu:v2.3
+            imagePullPolicy: IfNotPresent
+            name: tensorflow
+            ports:
+            - containerPort: 9081
+              protocol: TCP
+            resources:
+              limits:
+                nvidia.com/gpu: 1
+            volumeMounts:
+            - mountPath: "/Computer"
+              name: codepvc
+            - mountPath: "/etc/localtime"
+              name: timepvc
+          volumes:
+          - glusterfs:
+              endpoints: "glusterfs-cluster"
+              path: "aifs/demo"
+            name: codepvc
+          - hostPath:
+              path: "/usr/share/zoneinfo/Asia/Shanghai"
+            name: timepvc
+    PS:
+      replicas: 1
+      restartPolicy: Never
+      template:
+        spec:
+          containers:
+          - args: ["/Computer/inceptionv4.py"]
+            command: ["python3"]
+            image: compute-gpu:v2.3
+            imagePullPolicy: IfNotPresent
+            name: tensorflow
+            ports:
+            - containerPort: 9081
+              protocol: TCP
+            volumeMounts:
+            - mountPath: "/Computer"
+              name: codepvc
+            - mountPath: "/etc/localtime"
+              name: timepvc
+          volumes:
+          - glusterfs:
+              endpoints: "glusterfs-cluster"
+              path: "aifs/demo"
+            name: codepvc
+          - hostPath:
+              path: "/usr/share/zoneinfo/Asia/Shanghai"
+            name: timepvc

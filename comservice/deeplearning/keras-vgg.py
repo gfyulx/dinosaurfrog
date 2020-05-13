@@ -167,7 +167,6 @@ class vgg():
         print(ans)
         print("预测结果是:%s" % (self.classes[max_index[0] + 1]))
 
-
 if __name__=='__main__':
 
     data = r"D:/linewell/item/di/data/fruit/train_data.npy"

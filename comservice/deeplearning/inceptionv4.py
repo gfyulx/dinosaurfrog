@@ -81,100 +81,119 @@ class InceptionV4():
         # img, label = self.generate_data(shuffle=True)
         tensorboardogs = TensorBoard(log_dir=self.FLAGS.logdir, write_graph=True, write_images=True)
 
-        tf_config = json.loads(os.environ.get('TF_CONFIG') or '{}')
-        task_config = tf_config.get('task', {})
-        task_index = task_config.get('index')
-        is_chief = (self.FLAGS.task_index == 0)
+        # tf_config = json.loads(os.environ.get('TF_CONFIG') or '{}')
+        # task_config = tf_config.get('task', {})
+        # task_index = task_config.get('index')
+        # is_chief = (self.FLAGS.task_index == 0)
+        #
+        # task_type = task_config.get('type')
+        #
+        # self.FLAGS.job_name = task_type
+        # self.FLAGS.task_index = task_index
+        #
+        # print("job name = %s" % self.FLAGS.job_name)
+        # print("task index = %d" % self.FLAGS.task_index)
+        #
+        # cluster_config = tf_config.get('cluster', {})
+        # ps_hosts = cluster_config.get('ps')
+        # worker_hosts = cluster_config.get('worker')
+        # # chief_hosts = cluster_config.get('chief')
+        # ps_hosts_str = ','.join(ps_hosts)
+        # worker_hosts_str = ','.join(worker_hosts)
+        # # chief_hosts_str = ','.join(chief_hosts)
+        #
+        # self.FLAGS.ps_hosts = ps_hosts_str
+        # self.FLAGS.worker_hosts = worker_hosts_str
+        # # self.FLAGS.chief_hosts = chief_hosts_str
+        # ps_spec = self.FLAGS.ps_hosts.split(",")
+        # worker_spec = self.FLAGS.worker_hosts.split(",")
+        # chief_spec = self.FLAGS.chief_hosts.split(",")
+        # num_workers = len(worker_spec)
+        # cluster = tf.train.ClusterSpec({"ps": ps_spec, "worker": worker_spec, "chief": {}})
+        #
+        # if not self.FLAGS.existing_servers:
+        #     server = tf.train.Server(
+        #         cluster, job_name=self.FLAGS.job_name, task_index=self.FLAGS.task_index)
+        # if self.FLAGS.num_gpus > 0:
+        #     gpu = (self.FLAGS.task_index % self.FLAGS.num_gpus)
+        #     if self.FLAGS.job_name == "worker":
+        #         worker_device = "/job:worker/task:%d/gpu:%d" % (self.FLAGS.task_index, gpu)
+        #     elif self.FLAGS.job_name == "chief":
+        #         worker_device = "/job:chief/task:%d/gpu:%d" % (self.FLAGS.task_index, gpu)
+        # elif self.FLAGS.num_gpus == 0:
+        #     cpu = 0
+        #     worker_device = "/job:worker/task:%d/cpu:%d" % (self.FLAGS.task_index, cpu)
+        #
+        # if self.FLAGS.job_name == "ps":
+        #     server.join()
+        # ###train#####
+        # elif self.FLAGS.job_name == "worker" or self.FLAGS.job_name == "chief":
+        #     # with tf.Session(server.target):
+        #     with tf.device(tf.train.replica_device_setter(
+        #             worker_device=worker_device,
+        #             ps_device="/job:ps/cpu:0",
+        #             cluster=cluster)):
+        #         # global_step = tf.Variable(0, name="global_step", trainable=False)
+        #         sess_config = tf.ConfigProto(
+        #             allow_soft_placement=True,
+        #             log_device_placement=False,
+        #             device_filters=["/job:ps",
+        #                             "/job:worker/task:%d" % self.FLAGS.task_index],
+        #             gpu_options=tf.GPUOptions(allow_growth=True))
+        #
+        #         # img, label = self.generate_data()
+        #         model = self.inception_v4(num_classes=5, dropout_keep_prob=0.2,
+        #                                   learningRate=self.FLAGS.learning_rate, weights=None, include_top=None)
+        #         optimizer = tf.train.AdamOptimizer(learning_rate=self.FLAGS.learning_rate)
+        #         model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+        #         # config = tf.estimator.RunConfig(
+        #         #     experimental_distribute=tf.contrib.distribute.DistributeConfig(
+        #         #         train_distribute=tf.contrib.distribute.CollectiveAllReduceStrategy(
+        #         #             num_gpus_per_worker=self.FLAGS.num_gpus),
+        #         #         eval_distribute=tf.contrib.distribute.MirroredStrategy(
+        #         #             num_gpus_per_worker=self.FLAGS.num_gpus)))
+        #         #ps_strategy = tf.distribute.experimental.ParameterServerStrategy()
+        #         config=tf.estimator.RunConfig(train_distribute=tf.distribute.experimental.MultiWorkerMirroredStrategy())
+        #         # config = tf.estimator.RunConfig(
+        #         #     model_dir="/Computer/",
+        #         #     save_summary_steps=100,
+        #         #     log_step_count_steps=100,
+        #         #     save_checkpoints_steps=500,
+        #         #     session_config=sess_config
+        #         # )
+        #         esModel = tf.keras.estimator.model_to_estimator(model,config=config)
+        #
+        #         # model.fit(img, label, batch_size=self.FLAGS.batch_size, epochs=self.FLAGS.epoch, verbose=1,
+        #         #           validation_split=0.3,
+        #         #           callbacks=[tensorboardogs])
+        #         # esModel.train(img,label,epochs=self.FLAGS.epoch,batch_size=self.FLAGS.batch_size,hooks=[])
+        #         # esModel.export_saved_model(self.FLAGS.model_dir,inputs)    模型保存
+        #         # Train and evaluate the model. Evaluation will be skipped if there is not an
+        #         # "evaluator" job in the cluster.
+        #         #esModel.train(input_fn=lambda:self.generate_data(),steps=1000)
+        #         tf.estimator.train_and_evaluate(
+        #             esModel,
+        #             train_spec=tf.estimator.TrainSpec(input_fn=self.generate_data),
+        #             eval_spec=tf.estimator.EvalSpec(input_fn=self.generate_data))
 
-        task_type = task_config.get('type')
+        ###########################
+        # keras
+        strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy(
+            tf.distribute.experimental.CollectiveCommunication.AUTO)
+        with strategy.scope():
+            traindata = self.generate_data(shuffle=True)
+            # print(img,label)
+            model = self.inception_v4(num_classes=5, dropout_keep_prob=0.2,
+                                      learningRate=self.FLAGS.learning_rate, weights=None, include_top=None)
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.FLAGS.learning_rate)
+            model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+            model.fit(traindata,
+                      # batch_size=self.FLAGS.batch_size,
+                      epochs=self.FLAGS.epoch,
+                      # verbose=1,
+                      # validation_split=0.3,
+                      callbacks=[tensorboardogs])
 
-        self.FLAGS.job_name = task_type
-        self.FLAGS.task_index = task_index
-
-        print("job name = %s" % self.FLAGS.job_name)
-        print("task index = %d" % self.FLAGS.task_index)
-
-        cluster_config = tf_config.get('cluster', {})
-        ps_hosts = cluster_config.get('ps')
-        worker_hosts = cluster_config.get('worker')
-        # chief_hosts = cluster_config.get('chief')
-        ps_hosts_str = ','.join(ps_hosts)
-        worker_hosts_str = ','.join(worker_hosts)
-        # chief_hosts_str = ','.join(chief_hosts)
-
-        self.FLAGS.ps_hosts = ps_hosts_str
-        self.FLAGS.worker_hosts = worker_hosts_str
-        # self.FLAGS.chief_hosts = chief_hosts_str
-        ps_spec = self.FLAGS.ps_hosts.split(",")
-        worker_spec = self.FLAGS.worker_hosts.split(",")
-        chief_spec = self.FLAGS.chief_hosts.split(",")
-        num_workers = len(worker_spec)
-        cluster = tf.train.ClusterSpec({"ps": ps_spec, "worker": worker_spec,"chief":{}})
-
-        if not self.FLAGS.existing_servers:
-            server = tf.train.Server(
-                cluster, job_name=self.FLAGS.job_name, task_index=self.FLAGS.task_index)
-        if self.FLAGS.num_gpus > 0:
-            gpu = (self.FLAGS.task_index % self.FLAGS.num_gpus)
-            if  self.FLAGS.job_name == "worker":
-                worker_device = "/job:worker/task:%d/gpu:%d" % (self.FLAGS.task_index, gpu)
-            elif  self.FLAGS.job_name == "chief":
-                worker_device = "/job:chief/task:%d/gpu:%d" % (self.FLAGS.task_index, gpu)
-        elif self.FLAGS.num_gpus == 0:
-            cpu = 0
-            worker_device = "/job:worker/task:%d/cpu:%d" % (self.FLAGS.task_index, cpu)
-
-        if self.FLAGS.job_name == "ps":
-            server.join()
-        ###train#####
-        elif self.FLAGS.job_name == "worker" or self.FLAGS.job_name == "chief":
-            # with tf.Session(server.target):
-            with tf.device(tf.train.replica_device_setter(
-                    worker_device=worker_device,
-                    ps_device="/job:ps/cpu:0",
-                    cluster=cluster)):
-                # global_step = tf.Variable(0, name="global_step", trainable=False)
-                sess_config = tf.ConfigProto(
-                    allow_soft_placement=True,
-                    log_device_placement=False,
-                    device_filters=["/job:ps",
-                                    "/job:worker/task:%d" % self.FLAGS.task_index],
-                    gpu_options=tf.GPUOptions(allow_growth=True))
-
-                # img, label = self.generate_data()
-                model = self.inception_v4(num_classes=5, dropout_keep_prob=0.2,
-                                          learningRate=self.FLAGS.learning_rate, weights=None, include_top=None)
-                optimizer = tf.train.AdamOptimizer(learning_rate=self.FLAGS.learning_rate)
-                model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-                # config = tf.estimator.RunConfig(
-                #     experimental_distribute=tf.contrib.distribute.DistributeConfig(
-                #         train_distribute=tf.contrib.distribute.CollectiveAllReduceStrategy(
-                #             num_gpus_per_worker=self.FLAGS.num_gpus),
-                #         eval_distribute=tf.contrib.distribute.MirroredStrategy(
-                #             num_gpus_per_worker=self.FLAGS.num_gpus)))
-                #ps_strategy = tf.distribute.experimental.ParameterServerStrategy()
-                config=tf.estimator.RunConfig(train_distribute=tf.distribute.experimental.MultiWorkerMirroredStrategy())
-                # config = tf.estimator.RunConfig(
-                #     model_dir="/Computer/",
-                #     save_summary_steps=100,
-                #     log_step_count_steps=100,
-                #     save_checkpoints_steps=500,
-                #     session_config=sess_config
-                # )
-                esModel = tf.keras.estimator.model_to_estimator(model,config=config)
-
-                # model.fit(img, label, batch_size=self.FLAGS.batch_size, epochs=self.FLAGS.epoch, verbose=1,
-                #           validation_split=0.3,
-                #           callbacks=[tensorboardogs])
-                # esModel.train(img,label,epochs=self.FLAGS.epoch,batch_size=self.FLAGS.batch_size,hooks=[])
-                # esModel.export_saved_model(self.FLAGS.model_dir,inputs)    模型保存
-                # Train and evaluate the model. Evaluation will be skipped if there is not an
-                # "evaluator" job in the cluster.
-                #esModel.train(input_fn=lambda:self.generate_data(),steps=1000)
-                tf.estimator.train_and_evaluate(
-                    esModel,
-                    train_spec=tf.estimator.TrainSpec(input_fn=self.generate_data),
-                    eval_spec=tf.estimator.EvalSpec(input_fn=self.generate_data))
 
     def get_file(self, data_dir):
         data_dir = self.FLAGS.data_dir
@@ -194,6 +213,7 @@ class InceptionV4():
         lf = LabelEncoder().fit(labels)
         data_label = lf.transform(labels).tolist()
         return images, data_label
+
 
     def writeTFrecord(self):
         if gfile.Exists(self.FLAGS.tfrecord_dir):
@@ -221,6 +241,7 @@ class InceptionV4():
                 writer.write(serialized)
             writer.close()
 
+
     def parse_map(self, reader):
         features = tf.parse_single_example(reader,
                                            features={'image': tf.io.FixedLenFeature([], tf.string),
@@ -234,17 +255,19 @@ class InceptionV4():
         size = tf.constant([img.shape[0], img.shape[1], img.shape[2]], dtype=tf.int64)
         return img, label
 
+
     def generate_data(self, shuffle=True):
         fileName = [os.path.join(self.FLAGS.tfrecord_dir, x) for x in os.listdir(self.FLAGS.tfrecord_dir)]
         dataset = tf.data.TFRecordDataset(fileName)
         if shuffle:
-            dataset = dataset.map(self.parse_map).repeat().batch(self.FLAGS.batch_size).shuffle(buffer_size=1000)
+            dataset = dataset.map(self.parse_map).repeat(self.FLAGS.epoch).batch(self.FLAGS.batch_size).shuffle(buffer_size=1000)
         else:
-            dataset = dataset.map(self.parse_map).repeat().batch(self.FLAGS.batch_size)
+            dataset = dataset.map(self.parse_map).repeat(self.FLAGS.epoch).batch(self.FLAGS.batch_size)
         # iterator = dataset.make_one_shot_iterator()
         # img_input, label = iterator.get_next()
         # return img_input, label
-        return dataset
+        return dataset.prefetch(buffer_size=int(1000/self.FLAGS.batch_size))
+
 
     def preprocess_input(self, x):
         x = np.divide(x, 255.0)
@@ -252,9 +275,9 @@ class InceptionV4():
         x = np.multiply(x, 2.0)
         return x
 
+
     def conv2d_bn(self, x, nb_filter, num_row, num_col,
                   padding='same', strides=(1, 1), use_bias=False):
-
         channel_axis = -1  # 固定图像的channel放在最后一个维度
         x = Convolution2D(nb_filter, (num_row, num_col),
                           strides=strides,
@@ -267,8 +290,8 @@ class InceptionV4():
         x = Activation('relu')(x)
         return x
 
-    def block_inception_a(self, input):
 
+    def block_inception_a(self, input):
         channel_axis = -1  # 固定图像的channel放在最后一个维度
         branch_0 = self.conv2d_bn(input, 96, 1, 1)
 
@@ -285,6 +308,7 @@ class InceptionV4():
         x = concatenate([branch_0, branch_1, branch_2, branch_3], axis=channel_axis)
         return x
 
+
     def block_reduction_a(self, input):
         channel_axis = -1  # 固定图像的channel放在最后一个维度
         branch_0 = self.conv2d_bn(input, 384, 3, 3, strides=(2, 2), padding='valid')
@@ -297,6 +321,7 @@ class InceptionV4():
 
         x = concatenate([branch_0, branch_1, branch_2], axis=channel_axis)
         return x
+
 
     def block_inception_b(self, input):
         channel_axis = -1  # 固定图像的channel放在最后一个维度
@@ -319,6 +344,7 @@ class InceptionV4():
         x = concatenate([branch_0, branch_1, branch_2, branch_3], axis=channel_axis)
         return x
 
+
     def block_reduction_b(self, input):
         channel_axis = -1  # 固定图像的channel放在最后一个维度
 
@@ -334,6 +360,7 @@ class InceptionV4():
 
         x = concatenate([branch_0, branch_1, branch_2], axis=channel_axis)
         return x
+
 
     def block_inception_c(self, input):
         channel_axis = -1  # 固定图像的channel放在最后一个维度
@@ -357,6 +384,7 @@ class InceptionV4():
 
         x = concatenate([branch_0, branch_1, branch_2, branch_3], axis=channel_axis)
         return x
+
 
     def inception_v4_base(self, input):
         channel_axis = -1  # 固定图像的channel放在最后一个维度
@@ -413,8 +441,8 @@ class InceptionV4():
 
         return net
 
-    def inception_v4(self, num_classes, dropout_keep_prob, learningRate, weights, include_top):
 
+    def inception_v4(self, num_classes, dropout_keep_prob, learningRate, weights, include_top):
         '''
         Creates the inception v4 network
         Args:
