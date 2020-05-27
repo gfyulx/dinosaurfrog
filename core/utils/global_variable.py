@@ -16,7 +16,7 @@ CONFIG = configparser.ConfigParser()
 PROJECT_NAME = "DI"
 
 PROJECT_VERSION = str(__version__)
-
+PROJECT_ENV = {}
 
 
 class LOG_LEVEL(Enum):

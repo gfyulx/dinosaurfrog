@@ -7,7 +7,8 @@
 
 import os
 import datetime
-from utils.global_variable import *
+from core.utils import *
+from core.utils.global_variable import *
 import json
 import numpy as np
 

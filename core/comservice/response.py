@@ -10,8 +10,8 @@ Description:define rest service response data
 import json
 import time
 
-from utils.common import extJsonEncoder
-from utils.global_variable import PROJECT_NAME, CONFIG, SYS_START_TIME, PROJECT_VERSION
+from core.utils import extJsonEncoder
+from core.utils import PROJECT_NAME, CONFIG, SYS_START_TIME, PROJECT_VERSION
 from .response_status import responseStatus
 
 

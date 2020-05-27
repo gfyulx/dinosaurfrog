@@ -15,12 +15,14 @@ from flask import Flask, request, Response as FL_RP
 from urllib import parse
 import signal
 from threading import Lock
+from core import utils as GV, utils as common
+from core.comservice import *
 
 #os.environ['TZ'] = 'Asia/Shanghai'
 current_directory = os.path.dirname(os.path.abspath(__file__))
 root_path = os.path.abspath(os.path.dirname(current_directory) + os.path.sep + ".")
 sys.path.append(root_path)
-from comservice import *
+
 
 CFG = sys.path[0] + 'config/config.ini'
 app = Flask(__name__)
@@ -36,7 +38,7 @@ def __genRPS(response: str):
     """
     return FL_RP(response, headers={"Server": GV.PROJECT_NAME,
                                     "Life": "Life is a constant struggle."},
-                 mimetype=GV.CPU_CONFIG.get("Response", "mimetype"))
+                 mimetype=GV.CONFIG.get("Response", "mimetype"))
 
 
 @app.route("/runCom", methods={'POST', 'GET'})
@@ -49,45 +51,45 @@ def runCom():
     isExtern = False
     comPath = None
     try:
-        _params = Common.getParameters(request, response)
-        if (Common.checkParameters(_params, "nodeId,comName,args,runType,runSpace")):
+        _params = common.getParameters(request, response)
+        if (common.checkParameters(_params, "nodeId,comName,args,runType,runSpace")):
             args = _params.get("args")
             nodeId = str(_params.get("nodeId")).lower()
-            runMethod = Common.getRunType(_params.get("runMethod"))
+            runMethod = common.getRunType(_params.get("runMethod"))
             preTrain = False if _params.get("preTrain") is None or _params.get("preTrain").lower() == "false" else True
             author = "" if _params.get("author") is None else _params.get("author")
             runType = _params.get("runType")
             runSpaceDir = _params.get("runSpace").strip()
             response.setRunSpace(runSpaceDir)
-            comName, comPath, isExtern = Common.prepareCom(_params)
+            comName, comPath, isExtern = common.prepareCom(_params)
             if isinstance(args, str):
                 args = json.loads(parse.unquote(args))
             if runSpaceDir is None:
                 runSpaceDir = GV.CPU_CONFIG.get("RunSpace", "tmpDir")
             else:
                 runSpaceDir = str(parse.unquote(runSpaceDir))
-            runId = Common.getRunId(comName, nodeId, runType, runSpaceDir)
+            runId = common.getRunId(comName, nodeId, runType, runSpaceDir)
             if (comName in GV.CPU_COMS):
                 taskLock.acquire()
-                if isExtern or Common.runSpaceExists(runId) == False:
-                    Common.addRunSpace(runId, nodeId=nodeId, comName=comName, comPath=comPath,
+                if isExtern or common.runSpaceExists(runId) == False:
+                    common.addRunSpace(runId, nodeId=nodeId, comName=comName, comPath=comPath,
                                        runSpaceDir=runSpaceDir)
-                if not Common.getRunSpace(runId).isIdle():
+                if not common.getRunSpace(runId).isIdle():
                     response.setStatus(ResponseStatus.COM_IN_RUN.getCode())
                     response.setInfo(ResponseStatus.COM_IN_RUN.getMsg())
                     taskLock.release()
                 else:
-                    Common.setCPUContext(runId, context={"args": _params, "NNContext": NNContext(_params, False)},
+                    common.setCPUContext(runId, context={"args": _params, "NNContext": NNContext(_params, False)},
                                          preTrain=preTrain)
                     def _run(cpuMonitor=True):
-                        Common.getRunSpace(runId).runCom(args=args, response=response, method=runMethod,
+                        common.getRunSpace(runId).runCom(args=args, response=response, method=runMethod,
                                                          preTrain=preTrain,
                                                          __Author=author, cpuMonitor=cpuMonitor)
 
-                    Common.getRunSpace(runId).runCom(args=args, response=response, method="runCheck",
+                    common.getRunSpace(runId).runCom(args=args, response=response, method="runCheck",
                                                      preTrain=preTrain)
                     if response.getStatus() == 0:
-                        Common.getRunSpace(runId).setReady()
+                        common.getRunSpace(runId).setReady()
                     taskLock.release()
                     if response.getStatus() == 0:
                         if runMethod == GV.COMPOMENT_RUN_TYPE.distributedRun:
@@ -98,13 +100,13 @@ def runCom():
                             _run(cpuMonitor=False)
                         else:
                             # run with job push type,only return push status,this will create thread to run
-                            if Common.cpuProcessExists(runId) == False:
-                                Common.initCpuProcess(runId)
-                            if Common.getCpuProcess(runId).isIdle():  # need check thread status
+                            if common.cpuProcessExists(runId) == False:
+                                common.initCpuProcess(runId)
+                            if common.getCpuProcess(runId).isIdle():  # need check thread status
                                 # if parameters meet the requirements will change to ready
-                                Common.getCpuProcess(runId).prepare(threading.Thread(target=_run))
+                                common.getCpuProcess(runId).prepare(threading.Thread(target=_run))
                                 response.setInfo("success push task!")
-                                response.setKV("logPath", Common.getRunSpace(runId).getLogPath(isDir=False))
+                                response.setKV("logPath", common.getRunSpace(runId).getLogPath(isDir=False))
                                 return __genRPS(response.toString())
                             else:
                                 response.setStatus(ResponseStatus.COM_IN_RUN.getCode())
@@ -121,9 +123,9 @@ def runCom():
 
     except Exception as e:
         response.setStatus(ResponseStatus.CODE_EXCEPTON.getCode())
-        response.setInfo(Common.formatException(e))
+        response.setInfo(common.formatException(e))
         if isExtern:
-            Common.unloadComs(comPath, nodeId)
+            common.unloadComs(comPath, nodeId)
         if (GV.CPU_CONFIG.get("ENV", "debug").lower() == "true"):
             raise e
 
@@ -138,24 +140,24 @@ def breakRunning():
     """
     response = Response()
     try:
-        _params = Common.getParameters(request, response)
-        if (Common.checkParameters(_params, "nodeId,comName,runType,runSpace")):
+        _params = common.getParameters(request, response)
+        if (common.checkParameters(_params, "nodeId,comName,runType,runSpace")):
             nodeId = str(_params.get("nodeId")).lower()
             runType = _params.get("runType")
-            comName, comPath, isExtern = Common.prepareCom(_params)
+            comName, comPath, isExtern = common.prepareCom(_params)
             runSpaceDir = _params.get("runSpace")
             comName = comName.lower()
             response.setRunSpace(runSpaceDir)
-            runId = Common.getRunId(comName, nodeId, runType, runSpaceDir)
-            if Common.cpuProcessExists(runId):
-                Common.getRunSpace(runId).runCom(response=response, method="break")
+            runId = common.getRunId(comName, nodeId, runType, runSpaceDir)
+            if common.cpuProcessExists(runId):
+                common.getRunSpace(runId).runCom(response=response, method="break")
             else:
                 tmpSpace = RunSpace(runId, nodeId=nodeId, comName=comName, comPath=comPath,
                                     runSpaceDir=runSpaceDir)
                 if tmpSpace.spaceIsLocked():
                     preTrain = False if _params.get("preTrain") is None or _params.get(
                         "preTrain").lower() == "false" else True
-                    Common.setCPUContext(runId, context={"args": _params, "NNContext": NNContext(_params, False)},
+                    common.setCPUContext(runId, context={"args": _params, "NNContext": NNContext(_params, False)},
                                          preTrain=preTrain)
                     tmpSpace.runCom(response=response, method="break")
                 else:
@@ -168,12 +170,12 @@ def breakRunning():
 
     except Exception as e:
         response.setStatus(ResponseStatus.CODE_EXCEPTON.getCode())
-        response.setInfo(Common.formatException(e))
+        response.setInfo(common.formatException(e))
         if (GV.CPU_CONFIG.get("ENV", "debug").lower() == "true"):
             raise e
     finally:
         if isExtern:
-            Common.unloadComs(comPath, nodeId)
+            common.unloadComs(comPath, nodeId)
     return __genRPS(response.toString())
 
 @app.route("/getResponse", methods={'POST', 'GET'})
@@ -184,26 +186,26 @@ def getResponse():
     """
     response = Response()
     try:
-        _params = Common.getParameters(request, response)
-        if Common.checkParameters(_params, "comName,nodeId,runType,runSpace"):
+        _params = common.getParameters(request, response)
+        if common.checkParameters(_params, "comName,nodeId,runType,runSpace"):
             nodeId = str(_params.get("nodeId")).lower()
             runType = _params.get("runType")
             runSpaceDir = _params.get("runSpace")
             response.setRunSpace(runSpaceDir)
-            comName, comPath, _ = Common.prepareCom(_params)
+            comName, comPath, _ = common.prepareCom(_params)
             comName = comName.lower()
-            runId = Common.getRunId(comName, nodeId, runType, runSpaceDir)
+            runId = common.getRunId(comName, nodeId, runType, runSpaceDir)
             # run thread judge
-            if Common.cpuProcessExists(runId):
-                if Common.getCpuProcess(runId).isReady():
+            if common.cpuProcessExists(runId):
+                if common.getCpuProcess(runId).isReady():
                     response.setStatus(ResponseStatus.COM_IN_READY.getCode())
                     response.setInfo(ResponseStatus.COM_IN_READY.getMsg())
                     return __genRPS(response.toString())
-                elif Common.getCpuProcess(runId).isRunning():
+                elif common.getCpuProcess(runId).isRunning():
                     response.setStatus(ResponseStatus.DATA_NOT_PREPARE.getCode())
-                    response.setInfo(runId + " thread state " + str(Common.getRunSpace(runId).isRunning()) + "," +
+                    response.setInfo(runId + " thread state " + str(common.getRunSpace(runId).isRunning()) + "," +
                                      ResponseStatus.DATA_NOT_PREPARE.getMsg() + "may need time " +
-                                     str(Common.getRunSpace(runId).trackEstimated()) + " s")
+                                     str(common.getRunSpace(runId).trackEstimated()) + " s")
                     return __genRPS(response.toString())
 
             tmpSpace = RunSpace(runId, nodeId=nodeId, comName=comName, comPath=comPath,
@@ -212,11 +214,11 @@ def getResponse():
                 with open(tmpSpace.getResponsePath(), 'r') as f:
                     response.setData(json.loads(f.read()))
             else:  # check RunSpace locker
-                if Common.runSpaceExists(runId) == True and Common.getRunSpace(runId).isRunning():
+                if common.runSpaceExists(runId) == True and common.getRunSpace(runId).isRunning():
                     response.setStatus(ResponseStatus.DATA_NOT_PREPARE.getCode())
-                    response.setInfo(runId + " thread state " + str(Common.getRunSpace(runId).isRunning()) + "," +
+                    response.setInfo(runId + " thread state " + str(common.getRunSpace(runId).isRunning()) + "," +
                                      ResponseStatus.DATA_NOT_PREPARE.getMsg() + "may need time " +
-                                     str(Common.getRunSpace(runId).trackEstimated()) + " s")
+                                     str(common.getRunSpace(runId).trackEstimated()) + " s")
                     return __genRPS(response.toString())
                 else:
                     if tmpSpace.spaceIsLocked():
@@ -252,7 +254,7 @@ def getResponse():
             return __genRPS(response.toString())
     except Exception as e:
         response.setStatus(ResponseStatus.CODE_EXCEPTON.getCode())
-        response.setInfo(Common.formatException(e))
+        response.setInfo(common.formatException(e))
         if (GV.CPU_CONFIG.get("ENV", "debug").lower() == "true"):
             raise e
 
@@ -270,7 +272,7 @@ def scanComs():
         response.setData({"COMS": GV.CPU_COMS})
     except Exception as e:
         response.setStatus(ResponseStatus.CODE_EXCEPTON.getCode())
-        response.setInfo(Common.formatException(e))
+        response.setInfo(common.formatException(e))
 
     return __genRPS(response.toString())
 
@@ -290,12 +292,12 @@ def genDoc():
         url = request.url[:-4]
         for k in GV.CPU_COMS:
             tmp = GV.CPU_COMS[k]
-            comDesc = getattr(importlib.import_module(GV.CPU_COMS[k]), Common.getComClassName(k)).info()
+            comDesc = getattr(importlib.import_module(GV.CPU_COMS[k]), common.getComClassName(k)).info()
             res = "%s\n\n%s" %(res,comDesc.genDoc(GV.CPU_COMS[k][9:].replace("."," > "),url))
         return "<html><head>%s</head><h2>%s Componments Document</h2> Current Version:%s, Total Nums:%s%s<p><hr>©2020 linewell.com</p></html>" % (css,GV.PROJECT_NAME,GV.PROJECT_VERSION,len(GV.CPU_COMS),res)
     except Exception as e:
         response.setStatus(ResponseStatus.CODE_EXCEPTON.getCode())
-        response.setInfo(Common.formatException(e)+tmp)
+        response.setInfo(common.formatException(e) + tmp)
     return __genRPS(response.toString())
 
 
@@ -307,9 +309,9 @@ def comInfo():
     """
     response = Response()
     try:
-        _params = Common.getParameters(request, response)
-        if Common.checkParameters(_params, "comName"):
-            comName, comPath, _ = Common.prepareCom(_params)
+        _params = common.getParameters(request, response)
+        if common.checkParameters(_params, "comName"):
+            comName, comPath, _ = common.prepareCom(_params)
             if (comName in GV.CPU_COMS):
                 RunSpace("", nodeId=GV.DEFAULT_NODE, comName=comName, runSpaceDir="", comPath=comPath).runCom(
                     response=response)
@@ -322,7 +324,7 @@ def comInfo():
 
     except Exception as e:
         response.setStatus(ResponseStatus.CODE_EXCEPTON.getCode())
-        response.setInfo(Common.formatException(e))
+        response.setInfo(common.formatException(e))
         if (GV.CPU_CONFIG.get("ENV", "debug").lower() == "true"):
             raise e
     return __genRPS(response.toString())
@@ -336,36 +338,36 @@ __methods = {"method": {"comInfo": "Read component detail information.",
 
 @app.route("/", methods={'POST', 'GET'})
 def default():
-    response = Response()
-    response.setRequest(request.args)
-    response.setData(__methods)
+    response = response()
+    response.set_request(request.args)
+    response.set_data(__methods)
     with open(sys.path[0] + '/README.md') as f:
         lines = f.readlines()
-    response.setKV("README", lines)
-    response.setKV("Environ",str(os.environ))
-    return __genRPS(response.toString())
+    response.set_KV("README", lines)
+    response.set_KV("Environ",str(os.environ))
+    return __genRPS(response.to_string())
 
 
 @app.errorhandler(404)
 def not_found(error):
-    response = Response()
-    response.setStatus(ResponseStatus.METHOD_NOT_FOUND.getCode())
-    response.setInfo(ResponseStatus.METHOD_NOT_FOUND.getMsg())
-    response.setData(__methods)
-    return __genRPS(response.toString())
+    response = response()
+    response.set_status(responseStatus.METHOD_NOT_FOUND.get_code())
+    response.set_info(responseStatus.METHOD_NOT_FOUND.get_msg())
+    response.set_data(__methods)
+    return __genRPS(response.to_string())
 
 
-def init_session(conf='config.ini'):
-    GV.CPU_CONFIG.read(conf)
-    Common.mkdir(GV.CPU_CONFIG.get("ENV", "logPath"))
-    Common.sysLog("app init with config " + conf)
+def init_session(conf='config/config.ini'):
+    GV.CONFIG.read(conf)
+    common.mkdir(GV.CONFIG.get("ENV", "logPath"))
+    common.sysLog("app init with config " + conf)
     GV.PROJECT_ENV['PATH'] = sys.path[0]
-    Common.loadComs(sys.path[0] + "/Core/Com/")
+    #common.loadComs(sys.path[0] + "/Core/Com/")
 
 
 def signalHandler(signum, frame):
-    Common.closeCurrentRunningCom()
-    Common.sysLog("app are interrupted externally!", level=GV.LOG_LEVEL.WARN)
+    common.closeCurrentRunningCom()
+    common.sysLog("app are interrupted externally!", level=GV.LOG_LEVEL.WARN)
     os._exit(0)
 
 
@@ -374,13 +376,13 @@ if __name__ == "__main__":
     try:
         signal.signal(signal.SIGINT, signalHandler)
         signal.signal(signal.SIGTERM, signalHandler)
-        Common.sysLog("app start with port " + GV.CPU_CONFIG.get("ENV", "port"))
-        os.environ['FLASK_ENV'] = "development" if Common.systemIsDebug() else "product"
+        common.sysLog("app start with port " + GV.CPU_CONFIG.get("ENV", "port"))
+        os.environ['FLASK_ENV'] = "development" if common.systemIsDebug() else "product"
         app.run(host='0.0.0.0', port=int(GV.CPU_CONFIG.get("ENV", "port")),
-                debug=Common.systemIsDebug())
+                debug=common.systemIsDebug())
     except Exception as e:
-        Common.sysLog("app start Failed!", level=GV.LOG_LEVEL.ERROR)
-        Common.sysLog(Common.formatException(e), level=GV.LOG_LEVEL.ERROR)
+        common.sysLog("app start Failed!", level=GV.LOG_LEVEL.ERROR)
+        common.sysLog(common.formatException(e), level=GV.LOG_LEVEL.ERROR)
         os._exit(0)
 else:
-    Common.sysLog("app start with outer!")
+    common.sysLog("app start with outer!")
