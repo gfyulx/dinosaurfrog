@@ -10,17 +10,17 @@ Description:define rest service response data
 import json
 import time
 
-from core.utils import extJsonEncoder
-from core.utils import PROJECT_NAME, CONFIG, SYS_START_TIME, PROJECT_VERSION
-from .response_status import responseStatus
+from core.utils.common import extJsonEncoder
+from core.utils.global_variable import PROJECT_NAME, CONFIG, SYS_START_TIME, PROJECT_VERSION
+from .response_status import ResponseStatus
 
 
-class response:
+class Response:
 
     __runSpace = ""
     def __init__(self):
         self.__data = {}
-        self.set_status(responseStatus.OK.getCode())
+        self.set_status(ResponseStatus.OK.get_code())
         self.set_info()
         self.set_env(CONFIG.get("ENV", "indicators"))
         self.__data['request'] = {}
@@ -46,8 +46,8 @@ class response:
     def set_datatype(self,dtype):
         self.__data['data_type'] = dtype
 
-    def set_KV(self, k, v,autoResume=False):
-        self.__data['data'][k] = self.resume(v) if autoResume else v
+    def set_KV(self, k, v):
+        self.__data['data'][k] = v
 
     def set_request(self, rq):
         self.__data['request'] = rq

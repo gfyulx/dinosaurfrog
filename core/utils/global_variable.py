@@ -18,6 +18,7 @@ PROJECT_NAME = "DI"
 PROJECT_VERSION = str(__version__)
 PROJECT_ENV = {}
 
+COMS={}
 
 class LOG_LEVEL(Enum):
     """

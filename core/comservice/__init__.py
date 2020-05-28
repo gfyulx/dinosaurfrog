@@ -7,8 +7,8 @@
 
 __version__ = '1.0'
 
-from .response import response
-from .response_status import responseStatus
+from .response import Response
+from .response_status import ResponseStatus
 
 
-__all__ = ["response","responseStatus"]
+__all__ = ["Response","ResponseStatus"]

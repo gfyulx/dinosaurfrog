@@ -9,7 +9,7 @@ Description: 状态码枚举类
 from enum import Enum, unique
 
 @unique
-class responseStatus(Enum):
+class ResponseStatus(Enum):
     OK = {"0": "success"}
     UNKNOWN_EXCEPTION = {"1": "Unknown exception!"}
     PARAM_NOT_SET = {"201": "Parameter not set!"}
