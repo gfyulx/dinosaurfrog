@@ -25,17 +25,21 @@ class ModelService(metaclass=ABCMeta):
         desc:
         init model env 、config
         """
+        _session=self.init_session(args)
+        self.env_config(**args)
+
+
+    def env_config(self,**args):
         os.environ['CUDA_VISIBLE_DEVICES'] = '0'
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-        _session=self.initSession(args)
 
-
-    def initSession(self,train_type=0,**args):
+    def init_session(self,train_type=0,**args):
         """
         :param train_type:
         0 :Mirrored Strategy
         1:MultiWorker Mirrored Strategy
         2:Parameter Server Strategy
+        other:not use strategy
         :return:
         """
         strategy=None
@@ -45,9 +49,6 @@ class ModelService(metaclass=ABCMeta):
             strategy=tf.distribute.experimental.MultiWorkerMirroredStrategy()
         elif train_type==2:
             strategy=tf.distribute.experimental.ParameterServerStrategy()
-        else:
-            raise DiException("train_type is not support")
-
         return strategy
 
 

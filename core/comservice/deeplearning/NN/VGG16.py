@@ -8,6 +8,7 @@
 Copyright:  Fujian Linewell Software Co., Ltd. All rights reserved.
 注意：本内容仅限于福建南威软件股份有限公司内部传阅，禁止外泄以及用于其他的商业目的
 """
+from tensorflow.keras import optimizers
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense
 from tensorflow.keras.layers import Dropout
@@ -18,7 +19,7 @@ class VGG16():
     def __init__(self,shape=(224,224,3)):
         self.shape=shape
 
-    def model(self):
+    def model(self,num_classes):
         input_1 = Input(shape=self.shape)  # 输入224*224*3
         # 第一部分
         # 卷积 64深度，大小是3*3 步长为1 使用零填充 激活函数relu
@@ -55,10 +56,8 @@ class VGG16():
         x = Dense(4096, activation="relu")(x)
         Dropout(0.5)(x)  # 输出 4096 1*1
         # 第三个全连接层 输出 softmax分类
-        out_ = Dense(self.num_classes, activation="softmax")(x)
+        out_ = Dense(num_classes, activation="softmax")(x)
         model = Model(inputs=input_1, outputs=out_)
-        # print(model.summary())
-        sgd = optimizers.sgd(lr=0.001, momentum=0.9, nesterov=True)
+        sgd = optimizers.SGD(lr=0.001, momentum=0.9, nesterov=True)
         model.compile(sgd, loss="categorical_crossentropy", metrics=["accuracy"])
-        # plot_model(model,"model.png")
         return model
