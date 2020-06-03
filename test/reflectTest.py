@@ -6,10 +6,10 @@
 # @description:
 import inspect
 
-import WordSimilarCompute
+
 
 if __name__=='__main__':
-    object=getattr(WordSimilarCompute,"WordSimilarCompute")
+    #object=getattr(WordSimilarCompute,"WordSimilarCompute")
     print(object)
     classA=getattr(object,"loadFile")
     print(classA)
@@ -18,4 +18,5 @@ if __name__=='__main__':
     if params:
         listP=[]
         for x in params:
+            pass
 
