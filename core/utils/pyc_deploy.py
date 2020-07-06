@@ -8,6 +8,7 @@
 """
 
 import os
+import sys
 import shutil
 from py_compile import compile
 
@@ -59,4 +60,12 @@ def pyc_ompile(cmd,path):
 
 
 if __name__=='__main__':
-    pyc_ompile(compile,"./")
+    if len(sys.argv)==2:
+        path = sys.argv[1]
+        pyc_ompile("compile", path)
+        pyc_ompile("copy", path)
+        pyc_ompile("remove", path)
+        pyc_ompile("cpython", path)
+    else:
+        print("usage:")
+        print("python3 pyc_deploy.py <path>")
